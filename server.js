@@ -41,98 +41,96 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ===== OAuth login route =====
 app.get('/auth', (req, res) => {
-const params = new URLSearchParams({
-  response_type: 'code',
-  client_id: CLIENT_ID,
-  redirect_uri: REDIRECT_URI,
-  scope: 'web refresh_token openid'
-});
-const authUrl = `${SF_LOGIN_URL}/services/oauth2/authorize?${params.toString()}`;
-res.redirect(authUrl);
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: CLIENT_ID,
+    redirect_uri: REDIRECT_URI,
+    scope: 'refresh_token openid'
+  });
+  const authUrl = `${SF_LOGIN_URL}/services/oauth2/authorize?${params.toString()}`;
+  console.log('Authorize URL:', authUrl);
+  res.redirect(authUrl);
 });
 
 // ===== OAuth callback =====
 app.get('/oauth/callback', async (req, res) => {
-const code = req.query.code;
-if (!code) return res.status(400).send('Missing code');
+  const code = req.query.code;
+  if (!code) return res.status(400).send('Missing code');
 
-// debug token exchange block — replace existing handler while debugging
-try {
-const tokenUrl = `${SF_LOGIN_URL.replace(/\/$/, '')}/services/oauth2/token`;
-const params = new URLSearchParams();
-params.append('grant_type', 'authorization_code');
-params.append('code', code);
-params.append('client_id', CLIENT_ID);
-params.append('client_secret', CLIENT_SECRET);
-params.append('redirect_uri', REDIRECT_URI);
-
-console.log('POSTing token request to:', tokenUrl);
-console.log('Request body (urlencoded):', params.toString());
-
-const tokenResp = await axios.post(tokenUrl, params.toString(), {
-  headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8' },
-  maxRedirects: 0,
-  validateStatus: status => status < 500
-});
-
-console.log('Token endpoint status:', tokenResp.status);
-console.log('Token endpoint headers:', tokenResp.headers);
-console.log('Token endpoint body (truncated):', typeof tokenResp.data === 'string' ? tokenResp.data.substring(0,2000) : JSON.stringify(tokenResp.data));
-
-if (tokenResp.status === 200 && tokenResp.data && tokenResp.data.access_token) {
-  req.session.sf = {
-    access_token: tokenResp.data.access_token,
-    refresh_token: tokenResp.data.refresh_token,
-    instance_url: tokenResp.data.instance_url
-  };
-  return res.redirect('/');
-}
-
-// If it's a redirect (302) or other non-200, log location if present
-if (tokenResp.status >= 300 && tokenResp.status < 400) {
-  console.error('Token endpoint redirected. Location header:', tokenResp.headers.location);
-}
-
-console.error('Token endpoint returned non-200 and no access_token.');
-return res.status(500).send('OAuth token exchange failed — token endpoint returned unexpected response. See server logs.');
-
-} catch (err) {
-console.error('Token exchange exception:', err.message);
-if (err.response) {
-  console.error('Err response status:', err.response.status);
-  console.error('Err response headers:', err.response.headers);
-  console.error('Err response body (truncated):', typeof err.response.data === 'string' ? err.response.data.substring(0,2000) : JSON.stringify(err.response.data));
-} else {
-  console.error('No response object in error:', err);
-}
-return res.status(500).send('OAuth token exchange failed. See server logs.');
-}
-
-  // As a debugging aid, try the generic login.salesforce.com token endpoint (do not use in prod)
   try {
-    const altUrl = 'https://login.salesforce.com/services/oauth2/token';
-    console.log('Attempting fallback token request to login.salesforce.com (debug only)');
-    const altParams = new URLSearchParams();
-    altParams.append('grant_type', 'authorization_code');
-    altParams.append('code', code);
-    altParams.append('client_id', CLIENT_ID);
-    altParams.append('client_secret', CLIENT_SECRET);
-    altParams.append('redirect_uri', REDIRECT_URI);
+    const tokenUrl = `${SF_LOGIN_URL.replace(/\/$/, '')}/services/oauth2/token`;
 
-    const altResp = await axios.post(altUrl, altParams.toString(), {
+    const params = new URLSearchParams();
+    params.append('grant_type', 'authorization_code');
+    params.append('code', code);
+    params.append('client_id', CLIENT_ID);
+    params.append('client_secret', CLIENT_SECRET);
+    params.append('redirect_uri', REDIRECT_URI);
+
+    console.log('POSTing token request to:', tokenUrl);
+    console.log('Request body (urlencoded):', params.toString());
+
+    const tokenResp = await axios.post(tokenUrl, params.toString(), {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8' },
       maxRedirects: 0,
       validateStatus: status => status < 500
     });
 
-    console.log('Fallback status:', altResp.status);
-    console.log('Fallback body:', altResp.data);
-  } catch (altErr) {
-    console.error('Fallback token attempt failed:', altErr.response ? altErr.response.data : altErr.message);
-  }
+    console.log('Token endpoint status:', tokenResp.status);
+    console.log('Token endpoint headers:', tokenResp.headers);
+    console.log('Token endpoint body (truncated):', typeof tokenResp.data === 'string' ? tokenResp.data.substring(0,2000) : JSON.stringify(tokenResp.data));
 
-  return res.status(500).send('OAuth token exchange failed. See server logs for details.');
-}
+    if (tokenResp.status === 200 && tokenResp.data && tokenResp.data.access_token) {
+      req.session.sf = {
+        access_token: tokenResp.data.access_token,
+        refresh_token: tokenResp.data.refresh_token,
+        instance_url: tokenResp.data.instance_url,
+        id: tokenResp.data.id,
+        issued_at: tokenResp.data.issued_at
+      };
+      return res.redirect('/');
+    }
+
+    if (tokenResp.status >= 300 && tokenResp.status < 400) {
+      console.error('Token endpoint redirected. Location header:', tokenResp.headers.location);
+    }
+
+    console.error('Token endpoint returned non-200 and no access_token.');
+    return res.status(500).send('OAuth token exchange failed — token endpoint returned unexpected response. See server logs.');
+  } catch (err) {
+    console.error('OAuth exchange failed:', err.message);
+    if (err.response) {
+      console.error('Status:', err.response.status);
+      console.error('Headers:', err.response.headers);
+      console.error('Body:', JSON.stringify(err.response.data, null, 2));
+    } else {
+      console.error('No response object:', err);
+    }
+
+    try {
+      const altUrl = 'https://login.salesforce.com/services/oauth2/token';
+      console.log('Attempting fallback token request to login.salesforce.com (debug only)');
+      const altParams = new URLSearchParams();
+      altParams.append('grant_type', 'authorization_code');
+      altParams.append('code', code);
+      altParams.append('client_id', CLIENT_ID);
+      altParams.append('client_secret', CLIENT_SECRET);
+      altParams.append('redirect_uri', REDIRECT_URI);
+
+      const altResp = await axios.post(altUrl, altParams.toString(), {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8' },
+        maxRedirects: 0,
+        validateStatus: status => status < 500
+      });
+
+      console.log('Fallback status:', altResp.status);
+      console.log('Fallback body:', altResp.data);
+    } catch (altErr) {
+      console.error('Fallback token attempt failed:', altErr.response ? altErr.response.data : altErr.message);
+    }
+
+    return res.status(500).send('OAuth token exchange failed. See server logs for details.');
+  }
 });
 
 // ===== Logout =====
