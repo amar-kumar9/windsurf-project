@@ -122,16 +122,25 @@
         s.src = scriptSrc;
 
         s.onload = () => {
-          statusEl.textContent = 'Runtime loaded — bootstrapping c-hello...';
+          statusEl.textContent = 'Runtime loaded — bootstrapping components...';
 
           // create <lightning-out-application> element (no Aura needed)
           const loApp = document.createElement('lightning-out-application');
           loApp.id = 'loApp';
-          loApp.setAttribute('components', 'c-hello');
+          loApp.setAttribute('components', 'c-case-list,c-case-detail,c-case-comments,c-hello');
           loApp.setAttribute('frontdoor-url', frontdoorUrl);
           linHost.appendChild(loApp);
 
-          // now add your LWC tag
+          // now add your LWC tags
+          const caseListEl = document.createElement('c-case-list');
+          linHost.appendChild(caseListEl);
+
+          const caseDetailEl = document.createElement('c-case-detail');
+          linHost.appendChild(caseDetailEl);
+
+          const caseCommentsEl = document.createElement('c-case-comments');
+          linHost.appendChild(caseCommentsEl);
+
           const helloEl = document.createElement('c-hello');
           linHost.appendChild(helloEl);
 
@@ -146,7 +155,7 @@
           });
           document.addEventListener('lo.component.ready', e => {
             console.log('lo.component.ready', e.detail);
-            statusEl.textContent = 'c-hello ready ✅';
+            statusEl.textContent = 'Component ready ✅';
           });
           document.addEventListener('lo.component.error', e => {
             console.error('lo.component.error', e.detail);
