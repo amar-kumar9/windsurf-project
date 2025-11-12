@@ -1,0 +1,172 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Lightning Out 2.0 — c-hello Demo</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+      padding: 20px;
+      background: #f7f8fa;
+      color: #111;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #e3e6ea;
+      padding: 18px;
+      border-radius: 10px;
+      max-width: 920px;
+      box-shadow: 0 4px 8px rgba(20,20,20,0.02);
+    }
+    .controls {
+      margin-bottom: 12px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    button {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #cfd6dd;
+      background: #f4f6f8;
+      cursor: pointer;
+    }
+    #linHost > * {
+      margin-top: 12px;
+    }
+    .small {
+      font-size: 13px;
+      color: #666;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <h2>Lightning Out 2.0 — <code>c-hello</code> Demo</h2>
+
+    <div id="status" class="controls small">Checking auth status...</div>
+
+    <div id="actions" class="controls" style="display:none;">
+      <button id="loginBtn">Login to Salesforce</button>
+      <button id="logoutBtn" style="display:none;">Logout</button>
+      <span id="note" class="small" style="margin-left:auto;"></span>
+    </div>
+
+    <div id="appArea" style="min-height:240px; margin-top:12px;">
+      <div id="linHost"></div>
+    </div>
+
+    <div style="margin-top:12px;" class="small">
+      <strong>Debug:</strong>
+      Open DevTools → Console and watch for <code>lo.application.ready</code> and
+      <code>lo.component.ready</code> events.
+    </div>
+  </div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const actionsEl = document.getElementById('actions');
+    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const linHost = document.getElementById('linHost');
+    const noteEl = document.getElementById('note');
+
+    loginBtn.addEventListener('click', () => (window.location = '/auth'));
+    logoutBtn.addEventListener('click', () => (window.location = '/logout'));
+
+    async function checkAuth() {
+      try {
+        const r = await fetch('/api/me');
+        const j = await r.json();
+        if (j.authenticated) {
+          statusEl.textContent = `Authenticated — instance: ${j.instance_url}`;
+          actionsEl.style.display = 'flex';
+          loginBtn.style.display = 'none';
+          logoutBtn.style.display = 'inline-block';
+          await initLightningOut();
+        } else {
+          statusEl.textContent = 'Not authenticated with Salesforce.';
+          actionsEl.style.display = 'flex';
+          loginBtn.style.display = 'inline-block';
+          logoutBtn.style.display = 'none';
+        }
+      } catch (err) {
+        statusEl.textContent = 'Auth check failed: ' + err.message;
+        actionsEl.style.display = 'flex';
+      }
+    }
+
+    async function initLightningOut() {
+      statusEl.textContent = 'Requesting frontdoor URL...';
+      try {
+        const resp = await fetch('/api/frontdoor');
+        if (!resp.ok) {
+          const txt = await resp.text();
+          statusEl.textContent = 'Could not get frontdoor: ' + txt;
+          return;
+        }
+
+        const { frontdoorUrl, note } = await resp.json();
+        if (note) noteEl.textContent = note;
+        statusEl.textContent = 'Got frontdoor URL. Loading Lightning Out runtime...';
+
+        // derive runtime script from the same Salesforce instance
+        const u = new URL(frontdoorUrl);
+        const scriptSrc = `${u.origin}/lightning/lightning.out.latest/index.iife.prod.js`;
+
+        const s = document.createElement('script');
+        s.type = 'text/javascript';
+        s.async = true;
+        s.src = scriptSrc;
+
+        s.onload = () => {
+          statusEl.textContent = 'Runtime loaded — bootstrapping c-hello...';
+
+          // create <lightning-out-application> element (no Aura needed)
+          const loApp = document.createElement('lightning-out-application');
+          loApp.id = 'loApp';
+          loApp.setAttribute('components', 'c-hello');
+          loApp.setAttribute('frontdoor-url', frontdoorUrl);
+          linHost.appendChild(loApp);
+
+          // now add your LWC tag
+          const helloEl = document.createElement('c-hello');
+          linHost.appendChild(helloEl);
+
+          // lifecycle listeners
+          window.addEventListener('lo.application.ready', () => {
+            console.log('lo.application.ready');
+            statusEl.textContent = 'Lightning Out 2.0 app ready ✅';
+          });
+          window.addEventListener('lo.application.error', e => {
+            console.error('lo.application.error', e.detail);
+            statusEl.textContent = 'Lightning Out app error — check console';
+          });
+          document.addEventListener('lo.component.ready', e => {
+            console.log('lo.component.ready', e.detail);
+            statusEl.textContent = 'c-hello ready ✅';
+          });
+          document.addEventListener('lo.component.error', e => {
+            console.error('lo.component.error', e.detail);
+            statusEl.textContent = 'Component error — check console';
+          });
+        };
+
+        s.onerror = e => {
+          statusEl.textContent = 'Failed to load Lightning Out script: ' + scriptSrc;
+          console.error('Script load error', e);
+        };
+
+        document.head.appendChild(s);
+      } catch (err) {
+        statusEl.textContent = 'Failed to init Lightning Out: ' + (err.message || err);
+      }
+    }
+
+    // Kick off the flow
+    checkAuth();
+  </script>
+</body>
+</html>
