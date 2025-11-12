@@ -45,7 +45,7 @@ app.get('/auth', (req, res) => {
     response_type: 'code',
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
-    scope: 'refresh_token openid'
+    scope: 'web refresh_token openid'
   });
   const authUrl = `${SF_LOGIN_URL}/services/oauth2/authorize?${params.toString()}`;
   console.log('Authorize URL:', authUrl);
@@ -79,6 +79,7 @@ app.get('/oauth/callback', async (req, res) => {
     console.log('Token endpoint status:', tokenResp.status);
     console.log('Token endpoint headers:', tokenResp.headers);
     console.log('Token endpoint body (truncated):', typeof tokenResp.data === 'string' ? tokenResp.data.substring(0,2000) : JSON.stringify(tokenResp.data));
+    console.log('scopes on token:', tokenResp.data.scope);
 
     if (tokenResp.status === 200 && tokenResp.data && tokenResp.data.access_token) {
       req.session.sf = {
