@@ -9,22 +9,19 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// allow running behind a proxy (Replit) when TRUST_PROXY=1
-if (process.env.TRUST_PROXY === '1') {
-  app.set('trust proxy', 1);
-}
+// Required for correct cookie handling behind Render's proxy
+app.set('trust proxy', 1);
 
-// Session configuration
-const sessionCookieSecure = (process.env.SESSION_COOKIE_SECURE === '1'); // set to 1 on Replit
+// Secure cookie configuration for cross-site iframes
 app.use(session({
   secret: process.env.SESSION_SECRET || 'change-me',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: sessionCookieSecure,   // requires HTTPS when true
-    sameSite: 'none',              // required for cross-site iframes
+    secure: true,        // Render always serves HTTPS
+    sameSite: 'none',    // Required for Salesforce iframe cookies
     httpOnly: true,
-    maxAge: 60 * 60 * 1000         // 1 hour
+    maxAge: 60 * 60 * 1000 // 1 hour
   }
 }));
 
@@ -36,13 +33,13 @@ const {
 } = process.env;
 
 if (!CLIENT_ID || !CLIENT_SECRET || !REDIRECT_URI) {
-  console.warn('Warning: CLIENT_ID, CLIENT_SECRET, and REDIRECT_URI should be set in env');
+  console.warn('⚠️  Missing Salesforce Connected App environment variables.');
 }
 
-// Serve static assets from /public
+// Serve static assets
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- Start OAuth flow: redirect to Salesforce authorize endpoint ---
+// ===== OAuth login route =====
 app.get('/auth', (req, res) => {
   const params = new URLSearchParams({
     response_type: 'code',
@@ -54,7 +51,7 @@ app.get('/auth', (req, res) => {
   res.redirect(authUrl);
 });
 
-// --- OAuth callback: exchange code and save tokens in session ---
+// ===== OAuth callback =====
 app.get('/oauth/callback', async (req, res) => {
   const code = req.query.code;
   if (!code) return res.status(400).send('Missing code');
@@ -83,17 +80,17 @@ app.get('/oauth/callback', async (req, res) => {
 
     res.redirect('/');
   } catch (err) {
-    console.error('OAuth token exchange failed:', err.response?.data || err.message);
-    res.status(500).send('OAuth token exchange failed. Check server logs.');
+    console.error('OAuth exchange failed:', err.response?.data || err.message);
+    res.status(500).send('OAuth token exchange failed.');
   }
 });
 
-// --- Logout ---
+// ===== Logout =====
 app.get('/logout', (req, res) => {
   req.session.destroy(() => res.redirect('/'));
 });
 
-// --- API: Return one-time frontdoor URL for the current session ---
+// ===== Frontdoor URL exchange =====
 app.get('/api/frontdoor', async (req, res) => {
   const sf = req.session.sf;
   if (!sf || !sf.access_token || !sf.instance_url) {
@@ -109,30 +106,27 @@ app.get('/api/frontdoor', async (req, res) => {
     });
 
     const data = r.data;
-    let frontdoor = data.frontdoor_uri || data.frontdoor_url || null;
-
-    if (!frontdoor && typeof data === 'string') {
-      frontdoor = data;
-    }
-
+    let frontdoor = data.frontdoor_uri || data.frontdoor_url || (typeof data === 'string' ? data : null);
     if (!frontdoor) {
       const fallback = `${sf.instance_url}/secur/frontdoor.jsp?sid=${encodeURIComponent(sf.access_token)}`;
-      return res.json({ frontdoorUrl: fallback, note: 'fallback (not recommended for prod)' });
+      return res.json({ frontdoorUrl: fallback, note: 'fallback frontdoor (not recommended for prod)' });
     }
 
-    const fullFrontdoor = frontdoor.startsWith('http') ? frontdoor : `${sf.instance_url}${frontdoor}`;
-    return res.json({ frontdoorUrl: fullFrontdoor });
+    const fullFrontdoor = frontdoor.startsWith('http')
+      ? frontdoor
+      : `${sf.instance_url}${frontdoor}`;
+    res.json({ frontdoorUrl: fullFrontdoor });
   } catch (err) {
-    console.error('Error getting frontdoor:', err.response?.data || err.message);
-    return res.status(500).json({ error: 'singleaccess_failed', detail: err.response?.data || err.message });
+    console.error('Frontdoor request failed:', err.response?.data || err.message);
+    res.status(500).json({ error: 'singleaccess_failed', detail: err.message });
   }
 });
 
-// --- Helper: expose auth state to client ---
+// ===== Auth check =====
 app.get('/api/me', (req, res) => {
   if (!req.session.sf) return res.json({ authenticated: false });
-  return res.json({ authenticated: true, instance_url: req.session.sf.instance_url });
+  res.json({ authenticated: true, instance_url: req.session.sf.instance_url });
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server listening on http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
