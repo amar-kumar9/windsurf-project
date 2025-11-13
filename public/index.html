@@ -113,8 +113,7 @@
         statusEl.textContent = 'Got frontdoor URL. Loading Lightning Out runtime...';
 
         // derive runtime script from the same Salesforce instance
-        const u = new URL(frontdoorUrl);
-        const scriptSrc = `${u.origin}/lightning/lightning.out.latest/index.iife.prod.js`;
+        const scriptSrc = 'https://adp-16e-dev-ed.develop.my.salesforce.com/lightning/lightning.out.latest/index.iife.prod.js';
 
         const s = document.createElement('script');
         s.type = 'text/javascript';
@@ -127,7 +126,7 @@
           // create <lightning-out-application> element (no Aura needed)
           const loApp = document.createElement('lightning-out-application');
           loApp.id = 'loApp';
-          loApp.setAttribute('components', 'c-case-list,c-case-detail,c-case-comments,c-hello');
+          loApp.setAttribute('components', 'c-case-list,c-case-detail,c-case-comments,c-hello,c-amar-case-lightning-out');
           loApp.setAttribute('frontdoor-url', frontdoorUrl);
           linHost.appendChild(loApp);
 
@@ -143,6 +142,9 @@
 
           const helloEl = document.createElement('c-hello');
           linHost.appendChild(helloEl);
+
+          const amarEl = document.createElement('c-amar-case-lightning-out');
+          linHost.appendChild(amarEl);
 
           // lifecycle listeners
           window.addEventListener('lo.application.ready', () => {
