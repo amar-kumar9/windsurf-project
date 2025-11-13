@@ -43,6 +43,9 @@
 </head>
 
 <body>
+  <div class="controls" style="margin-bottom:16px;">
+    <button id="expBtn">go to exp cloud</button>
+  </div>
   <div class="card">
     <h2>Lightning Out 2.0 — <code>c-hello</code> Demo</h2>
 
@@ -72,9 +75,11 @@
     const logoutBtn = document.getElementById('logoutBtn');
     const linHost = document.getElementById('linHost');
     const noteEl = document.getElementById('note');
+    const expBtn = document.getElementById('expBtn');
 
     loginBtn.addEventListener('click', () => (window.location = '/auth'));
     logoutBtn.addEventListener('click', () => (window.location = '/logout'));
+    expBtn.addEventListener('click', () => window.open('https://adp-16e-dev-ed.develop.my.site.com/temp', '_blank'));
 
     async function checkAuth() {
       try {
@@ -126,23 +131,11 @@
           // create <lightning-out-application> element (no Aura needed)
           const loApp = document.createElement('lightning-out-application');
           loApp.id = 'loApp';
-          loApp.setAttribute('components', 'c-case-list,c-case-detail,c-case-comments,c-hello,c-amar-case-lightning-out');
+          loApp.setAttribute('components', 'c-amar-case-lightning-out');
           loApp.setAttribute('frontdoor-url', frontdoorUrl);
           linHost.appendChild(loApp);
 
           // now add your LWC tags
-          const caseListEl = document.createElement('c-case-list');
-          linHost.appendChild(caseListEl);
-
-          const caseDetailEl = document.createElement('c-case-detail');
-          linHost.appendChild(caseDetailEl);
-
-          const caseCommentsEl = document.createElement('c-case-comments');
-          linHost.appendChild(caseCommentsEl);
-
-          const helloEl = document.createElement('c-hello');
-          linHost.appendChild(helloEl);
-
           const amarEl = document.createElement('c-amar-case-lightning-out');
           linHost.appendChild(amarEl);
 
